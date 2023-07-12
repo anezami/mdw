@@ -1,0 +1,20 @@
+{
+	"name": "cloudsales_customers",
+	"properties": {
+		"folder": {
+			"name": "Challenge 05/external"
+		},
+		"content": {
+			"query": "IF NOT EXISTS (SELECT * FROM sys.external_file_formats WHERE name = 'SynapseParquetFormat') \n\tCREATE EXTERNAL FILE FORMAT [SynapseParquetFormat] \n\tWITH ( FORMAT_TYPE = PARQUET)\nGO\n\nIF NOT EXISTS (SELECT * FROM sys.external_data_sources WHERE name = 'southridge_datalakesouthridgerbr_dfs_core_windows_net') \n\tCREATE EXTERNAL DATA SOURCE [southridge_datalakesouthridgerbr_dfs_core_windows_net] \n\tWITH (\n\t\tLOCATION   = 'https://datalakesouthridgerbr.dfs.core.windows.net/southridge', \n\t)\nGo\n\nCREATE EXTERNAL TABLE cloudsales_customers (\n\t[CustomerID] varchar(8000),\n\t[LastName] varchar(8000),\n\t[FirstName] varchar(8000),\n\t[PhoneNumber] varchar(8000),\n\t[CreatedDate] date,\n\t[UpdatedDate] date\n\t)\n\tWITH (\n\tLOCATION = 'raw/cloudsales/Customers.parquet',\n\tDATA_SOURCE = [southridge_datalakesouthridgerbr_dfs_core_windows_net],\n\tFILE_FORMAT = [SynapseParquetFormat]\n\t)\nGO\n\nSELECT TOP 100 * FROM cloudsales_customers\nGO\n\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "southridgeserverless",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

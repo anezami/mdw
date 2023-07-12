@@ -1,0 +1,20 @@
+{
+	"name": "cc -  truncate",
+	"properties": {
+		"folder": {
+			"name": "Challenge 05/consolidated customer"
+		},
+		"content": {
+			"query": "--SELECT LastName, FirstName, AddressLine1, count(*) aantal FROM [dbo].[DimCustomersStaging]\n--GROUP BY LastName, FirstName, AddressLine1\n--ORDER BY aantal DESC\n\n\nUPDATE [dbo].[DimCustomers]\nSET [ActiveFlag] = 0\nWHERE EXISTS (SELECT 1 FROM [dbo].[DimCustomers] dc \n              WHERE dc.LastName = LastName \n                AND dc.FirstName = FirstName \n                AND dc.AddressLine1 = AddressLine1\n\n             )\n\nSELECT TOP (100) [CustomerSK]\n,[CustomerID]\n,[LastName]\n,[FirstName]\n,[AddressLine1]\n,[AddressLine2]\n,[City]\n,[State]\n,[ZipCode]\n,[PhoneNumber]\n,[RecordStartDate]\n,[RecordEndDate]\n,[ActiveFlag]\nFROM [dbo].[DimCustomers]\nORDER BY [CustomerSK]\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "sqlpool",
+				"poolName": "sqlpool"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

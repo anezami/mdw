@@ -1,0 +1,20 @@
+{
+	"name": "cc - create dedicated pool",
+	"properties": {
+		"folder": {
+			"name": "Challenge 05/consolidated customer"
+		},
+		"content": {
+			"query": "IF NOT EXISTS (SELECT * FROM sys.objects O JOIN sys.schemas S ON O.schema_id = S.schema_id WHERE O.NAME = '[DimCustomersStaging]' AND O.TYPE = 'U' AND S.NAME = '[dbo]')\nCREATE TABLE [dbo].[DimCustomersStaging]\n\t(\n\t [CustomerID] nvarchar(4000),\n\t [LastName] nvarchar(4000),\n\t [FirstName] nvarchar(4000),\n\t [AddressLine1] nvarchar(4000),\n\t [AddressLine2] nvarchar(4000),\n\t [City] nvarchar(4000),\n\t [State] nvarchar(4000),\n\t [ZipCode] nvarchar(4000),\n\t [PhoneNumber] nvarchar(4000),\n\t [SourceSystemId] nvarchar(4000)\n\t)\nWITH\n\t(\n\tDISTRIBUTION = ROUND_ROBIN,\n\t HEAP\n\t -- CLUSTERED COLUMNSTORE INDEX\n\t)\nGO\n\n--Uncomment the 4 lines below to create a stored procedure for data pipeline orchestration​\n--CREATE PROC bulk_load_[DimCustomersStaging]\n--AS\n--BEGIN\nCOPY INTO [dbo].[DimCustomersStaging]\n(CustomerID 1, LastName 2, FirstName 3, AddressLine1 4, AddressLine2 5, City 6, State 7, ZipCode 8, PhoneNumber 9, SourceSystemId 10)\nFROM 'https://datalakesouthridgerbr.dfs.core.windows.net/conformed/customers/*.snappy.parquet'\nWITH\n(\n\tFILE_TYPE = 'PARQUET'\n\t,MAXERRORS = 0\n)\n--END\nGO\n\nSELECT TOP 100 * FROM [dbo].[DimCustomersStaging]\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "sqlpool",
+				"poolName": "sqlpool"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

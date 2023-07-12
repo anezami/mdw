@@ -1,0 +1,20 @@
+{
+	"name": "cc -  insert - advanced",
+	"properties": {
+		"folder": {
+			"name": "Challenge 05/consolidated customer/cursor"
+		},
+		"content": {
+			"query": "--SELECT LastName, FirstName, AddressLine1, count(*) aantal FROM [dbo].[DimCustomersStaging]\n--GROUP BY LastName, FirstName, AddressLine1\n--ORDER BY aantal DESC\n\n--SELECT DISTINCT cc.LastName, cc.* FROM [dbo].[DimCustomersStaging] cc\n--WHERE LastName = 'Leonas' AND FirstNAme = 'Rubis'\n--TRUNCATE TABLE [dbo].[DimCustomers]\nDECLARE customer_cursor CURSOR FOR \n--   SELECT 0 as [CustomerSK], [CustomerID], [LastName], [FirstName], [AddressLine1], [AddressLine2], [City], [State], [ZipCode], [neNumber], '2021-09-29 21:31:00' as [RecordStartDate], NULL as [RecordEndDate], 1 as [ActiveFlag] FROM [dbo].[DimCustomersStaging]\n     SELECT LastName FROM [dbo].[DimCustomersStaging]\n\nOPEN customer_cursor\n\nFETCH NEXT FROM customer_cursor   \nINTO @CustomerSK, @CustomerID, @LastName , @FirstName , @AddressLine1 , @AddressLine2, @City, @State, @ZipCode, @PhoneNumber, @RecordStartDate, @RecordEndDate, @ActiveFlag    \n  \nWHILE @@FETCH_STATUS = 0  \nBEGIN \n\n   INSERT INTO [dbo].[DimCustomers] \n    ([CustomerSK], [CustomerID], [LastName], [FirstName],[AddressLine1],[AddressLine2],[City],[State],[ZipCode],[PhoneNumber],[RecordStartDate],[RecordEndDate],[ActiveFlag])\n    VALUES\n    (@CustomerSK, @CustomerID, @LastName, @FirstName,@AddressLine1,@AddressLine2,@City,@State,@ZipCode,@PhoneNumber,@RecordStartDate,@RecordEndDate,@ActiveFlag)\n\n    FETCH NEXT FROM customer_cursor   \n    INTO @CustomerSK, @CustomerID, @LastName , @FirstName , @AddressLine1 , @AddressLine2, @City, @State, @ZipCode, @PhoneNumber, @RecordStartDate, @RecordEndDate, @ActiveFlag    \nEND\n\nSELECT TOP (100) [CustomerSK]\n,[CustomerID]\n,[LastName]\n,[FirstName]\n,[AddressLine1]\n,[AddressLine2]\n,[City]\n,[State]\n,[ZipCode]\n,[PhoneNumber]\n,[RecordStartDate]\n,[RecordEndDate]\n,[ActiveFlag]\nFROM [dbo].[DimCustomers]\nORDER BY [CustomerSK]",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "sqlpool",
+				"poolName": "sqlpool"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

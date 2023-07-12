@@ -1,0 +1,20 @@
+{
+	"name": "2_create_stored_procedures",
+	"properties": {
+		"folder": {
+			"name": "Blog"
+		},
+		"content": {
+			"query": "USE [Blog-Serverless-API];\n/****** Object:  StoredProcedure [dbo].[get_taxidata]    Script Date: 8/27/2021 9:28:46 AM ******/\nSET ANSI_NULLS ON\nGO\n\nSET QUOTED_IDENTIFIER ON\nGO\n\n\nCREATE   PROCEDURE [dbo].[get_taxidata]\nAS\nSET NOCOUNT ON;\n-- Cast is needed to correctly inform pyodbc of output type is NVARCHAR(MAX)\n-- Needed if generated json is bigger then 4000 bytes and thus pyodbc trucates it\n-- https://stackoverflow.com/questions/49469301/pyodbc-truncates-the-response-of-a-sql-server-for-json-query\n\tSELECT *\n\tFROM \n\t\t[dbo].[taxidemo] \n\tFOR JSON PATH\nGO\n\n/****** Object:  StoredProcedure [dbo].[get_taxidataAmount]    Script Date: 8/27/2021 9:29:04 AM ******/\nSET ANSI_NULLS ON\nGO\n\nSET QUOTED_IDENTIFIER ON\nGO\n\nCREATE   PROCEDURE [dbo].[get_taxidataAmount]\n@Json NVARCHAR(MAX)\nAS\nSET NOCOUNT ON;\nDECLARE @total_amount FLOAT = JSON_VALUE(@Json, '$.total_amount');\nSET NOCOUNT ON;\n-- Cast is needed to corretly inform pyodbc of output type is NVARCHAR(MAX)\n-- Needed if generated json is bigger then 4000 bytes and thus pyodbc trucates it\n-- https://stackoverflow.com/questions/49469301/pyodbc-truncates-the-response-of-a-sql-server-for-json-query\n\tSELECT \n        *\n\tFROM \n\t\t[dbo].[taxidemo] \n\nWHERE \n\t[total_amount] = @total_amount\n\n\tFOR JSON PATH\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "Blog-Serverless-API",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

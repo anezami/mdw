@@ -1,0 +1,34 @@
+{
+	"name": "SqlPoolTableDimActors",
+	"properties": {
+		"annotations": [],
+		"type": "SqlPoolTable",
+		"schema": [
+			{
+				"name": "ActorSK",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "ActorID",
+				"type": "uniqueidentifier"
+			},
+			{
+				"name": "ActorName",
+				"type": "varchar"
+			},
+			{
+				"name": "ActorGender",
+				"type": "char"
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "DimActors"
+		},
+		"sqlPool": {
+			"referenceName": "sqlpool",
+			"type": "SqlPoolReference"
+		}
+	}
+}

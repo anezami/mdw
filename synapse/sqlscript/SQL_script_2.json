@@ -1,0 +1,17 @@
+{
+	"name": "SQL_script_2",
+	"properties": {
+		"content": {
+			"query": "-- This is auto-generated code\nSELECT\n    TOP 100 *\nFROM\n    OPENROWSET(\n        BULK 'https://datalakesouthridgerbr.dfs.core.windows.net/taxidata/part-00005-tid-8364420724365899593-b5fafbac-8fd5-4869-a6b6-e607867d9673-6-1-c000.snappy.parquet',\n        FORMAT = 'PARQUET'\n    ) AS [result]\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "master",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

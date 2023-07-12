@@ -1,0 +1,136 @@
+{
+	"name": "CloudSalesPipeline",
+	"properties": {
+		"activities": [
+			{
+				"name": "ForEach_Table",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.items",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Copy_Rows",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "ParquetSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "ParquetWriteSettings"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "CloudSalesDataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"tableName": {
+											"value": "@item().source.tableName",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DataLakeParquet",
+									"type": "DatasetReference",
+									"parameters": {
+										"tableName": {
+											"value": "@item().destination.fileName",
+											"type": "Expression"
+										},
+										"filePath": {
+											"value": "@pipeline().parameters.destinationFolder",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"items": {
+				"type": "array",
+				"defaultValue": [
+					{
+						"source": {
+							"tableName": "[dbo].[Addresses]"
+						},
+						"destination": {
+							"fileName": "Addresses"
+						}
+					},
+					{
+						"source": {
+							"tableName": "[dbo].[Customers]"
+						},
+						"destination": {
+							"fileName": "Customers"
+						}
+					},
+					{
+						"source": {
+							"tableName": "[dbo].[OrderDetails]"
+						},
+						"destination": {
+							"fileName": "OrderDetails"
+						}
+					},
+					{
+						"source": {
+							"tableName": "[dbo].[Orders]"
+						},
+						"destination": {
+							"fileName": "Orders"
+						}
+					}
+				]
+			},
+			"destinationFolder": {
+				"type": "string",
+				"defaultValue": "raw/cloudsales"
+			}
+		},
+		"folder": {
+			"name": "Challenge 02"
+		},
+		"annotations": [],
+		"lastPublishTime": "2021-09-13T08:37:20Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

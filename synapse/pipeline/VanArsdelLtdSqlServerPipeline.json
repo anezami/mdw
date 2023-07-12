@@ -1,0 +1,144 @@
+{
+	"name": "VanArsdelLtdSqlServerPipeline",
+	"properties": {
+		"activities": [
+			{
+				"name": "ForEach_Table",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.items",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Copy_Rows",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "JsonSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "JsonWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "VanArsdelLtdSqlTableDataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"tableName": {
+											"value": "@item().source.tableName",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DataLakeMoviesJson",
+									"type": "DatasetReference",
+									"parameters": {
+										"fileName": {
+											"value": "@item().destination.fileName",
+											"type": "Expression"
+										},
+										"filePath": {
+											"value": "@pipeline().parameters.destinationFolder",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"items": {
+				"type": "array",
+				"defaultValue": [
+					{
+						"source": {
+							"tableName": "[dbo].[Actors]"
+						},
+						"destination": {
+							"fileName": "Actors"
+						}
+					},
+					{
+						"source": {
+							"tableName": "[dbo].[Customers]"
+						},
+						"destination": {
+							"fileName": "Customers"
+						}
+					},
+					{
+						"source": {
+							"tableName": "[dbo].[MovieActors]"
+						},
+						"destination": {
+							"fileName": "MovieActors"
+						}
+					},
+					{
+						"source": {
+							"tableName": "[dbo].[Movies]"
+						},
+						"destination": {
+							"fileName": "Movies"
+						}
+					},
+					{
+						"source": {
+							"tableName": "[dbo].[OnlineMovieMappings]"
+						},
+						"destination": {
+							"fileName": "OnlineMovieMappings"
+						}
+					},
+					{
+						"source": {
+							"tableName": "[dbo].[Transactions]"
+						},
+						"destination": {
+							"fileName": "Transactions"
+						}
+					}
+				]
+			},
+			"destinationFolder": {
+				"type": "string",
+				"defaultValue": "raw/VanArsdel"
+			}
+		},
+		"folder": {
+			"name": "Challenge 03"
+		},
+		"annotations": [],
+		"lastPublishTime": "2021-09-13T09:48:10Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

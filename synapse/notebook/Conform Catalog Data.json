@@ -1,0 +1,602 @@
+{
+	"name": "Conform Catalog Data",
+	"properties": {
+		"folder": {
+			"name": "Challenge 04"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "SparkPool",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 5,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "5"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"enableDebugMode": false,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "Synapse PySpark"
+			},
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/513a7987-b0d9-4106-a24d-4b3f49136ea8/resourceGroups/mdw-oh-rbr-westeurope/providers/Microsoft.Synapse/workspaces/southridgesynapserbr/bigDataPools/SparkPool",
+				"name": "SparkPool",
+				"type": "Spark",
+				"endpoint": "https://southridgesynapserbr.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/SparkPool",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net"
+				},
+				"sparkVersion": "2.4",
+				"nodeCount": 10,
+				"cores": 8,
+				"memory": 56
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Challenge 04: Conform the catalog data\r\n",
+					"\r\n",
+					"This notebook contains the code to conform the source data in the data lake into a more useable dataset. "
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"import uuid\r\n",
+					"import pyspark.sql.functions as F\r\n",
+					"from pyspark.sql.functions import col\r\n",
+					"from pyspark.sql.types import StringType,DateType,LongType,IntegerType,TimestampType"
+				],
+				"execution_count": 1
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Collect the raw catalog data from Fourth Coffee"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"microsoft": {
+						"language": "python"
+					}
+				},
+				"source": [
+					"%%pyspark\r\n",
+					"fc_movies = spark.read.csv(\"abfss://southridge@datalakesouthridgerbr.dfs.core.windows.net/raw/FourthCoffee/Movies.csv\", header='true', inferSchema='true')\r\n",
+					"fc_actors = spark.read.csv(\"abfss://southridge@datalakesouthridgerbr.dfs.core.windows.net/raw/FourthCoffee/Actors.csv\", header='true', inferSchema='true')\r\n",
+					"fc_movie_actors = spark.read.csv(\"abfss://southridge@datalakesouthridgerbr.dfs.core.windows.net/raw/FourthCoffee/MovieActors.csv\", header='true', inferSchema='true')\r\n",
+					"fc_mappings = spark.read.csv(\"abfss://southridge@datalakesouthridgerbr.dfs.core.windows.net/raw/FourthCoffee/OnlineMovieMappings.csv\", header='true', inferSchema='true')\r\n",
+					"\r\n",
+					"fc_catalog = fc_movies \\\r\n",
+					"  .join(fc_movie_actors, on='MovieId', how='left') \\\r\n",
+					"  .join(fc_actors, on='ActorId', how='left') \\\r\n",
+					"  .join(fc_mappings, on='MovieId', how='left')\r\n",
+					"\r\n",
+					"fc_catalog.show()"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Collect the raw catalog data from VanArsdel"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"va_movies = spark.read.json(\"abfss://southridge@datalakesouthridgerbr.dfs.core.windows.net/raw/VanArsdel/Movies.json\")\r\n",
+					"va_actors = spark.read.json(\"abfss://southridge@datalakesouthridgerbr.dfs.core.windows.net/raw/VanArsdel/Actors.json\")\r\n",
+					"va_movie_actors = spark.read.json(\"abfss://southridge@datalakesouthridgerbr.dfs.core.windows.net/raw/VanArsdel/MovieActors.json\")\r\n",
+					"va_mappings = spark.read.json(\"abfss://southridge@datalakesouthridgerbr.dfs.core.windows.net/raw/VanArsdel/OnlineMovieMappings.json\")\r\n",
+					"\r\n",
+					"# Use the MovieActors data to join the actor information. Left join to preserve movies where the actors are not found\r\n",
+					"# Use the OnlineMovieMappings data to bring in the ids of movies which are also found in the Southridge Video catalog,\r\n",
+					"# again using the left join to preserve movies which are not matched.\r\n",
+					"\r\n",
+					"va_catalog = va_movies \\\r\n",
+					"  .join(va_movie_actors, on='MovieId', how='left') \\\r\n",
+					"  .join(va_actors, on='ActorId', how='left') \\\r\n",
+					"  .join(va_mappings, on='MovieId', how='left')\r\n",
+					"\r\n",
+					"va_catalog.show()"
+				],
+				"execution_count": 3
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Collect the raw catalog data from Southridge"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# After reading the JSON, explode the actors array to create multiple rows per movie, each having a single actor name\r\n",
+					"# Drop the original actors array, as it is then no longer needed\r\n",
+					"# Also drop the Cosmos DB metadata, as it will not be valuable here\r\n",
+					"\r\n",
+					"sr_catalog = spark.read.option(\"multiline\",\"true\").json(\"abfss://southridge@datalakesouthridgerbr.dfs.core.windows.net/raw/movies\") \\\r\n",
+					"  .withColumn('actor', F.explode('actors')) \\\r\n",
+					"  .drop('actors', '_attachments', '_etag', '_rid', '_self', '_ts')\r\n",
+					"\r\n",
+					"sr_catalog.show()"
+				],
+				"execution_count": 4
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Observe inconsistencies in the data types and formats\r\n",
+					"\r\n",
+					"Let's take a look at the following discrepencies which could cause fatal errors in downstream processing."
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Release dates and availability dates\r\n",
+					"\r\n",
+					"FourthCoffee and VanArsdel, Ltd. both seem to track the ReleaseDate for each movie. These are stored as strings, and we'll need to look into the formats they've used.\r\n",
+					"\r\n",
+					"Southridge Video is storing a releaseYear, an availabilityDate, and a streamingAvailabilityDate."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"fc_dates = fc_catalog.select(col('ReleaseDate').alias('FcReleaseDate'), col('MovieId'), col('OnlineMovieId'))\r\n",
+					"va_dates = va_catalog.select(col('ReleaseDate').alias('VaReleaseDate'), col('MovieId'), col('OnlineMovieId'))\r\n",
+					"sr_dates = sr_catalog.select(*['id', 'releaseYear', 'availabilityDate', 'streamingAvailabilityDate'])\r\n",
+					"\r\n",
+					"joined_dates = sr_dates \\\r\n",
+					"  .join(fc_dates, F.upper(sr_dates.id) == fc_dates.OnlineMovieId, how='left') \\\r\n",
+					"  .join(va_dates, sr_dates.id == va_dates.OnlineMovieId, how='left')\r\n",
+					"\r\n",
+					"joined_dates \\\r\n",
+					"  .filter('FcReleaseDate is not null AND VaReleaseDate is not null') \\\r\n",
+					"  .limit(1) \\\r\n",
+					"  .collect()\r\n",
+					"\r\n",
+					""
+				],
+				"execution_count": 5
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"### Looking at the dates\r\n",
+					"\r\n",
+					"```text\r\n",
+					"[Row(id='300e034e-4260-49ed-85e2-39a8d5030713',\r\n",
+					"    releaseYear=2015,\r\n",
+					"    availabilityDate='2017-07-25 00:00:00',\r\n",
+					"    streamingAvailabilityDate='2017-09-19 00:00:00',\r\n",
+					"    FcReleaseDate='07-25-2017',\r\n",
+					"    OnlineMovieId='300E034E-4260-49ED-85E2-39A8D5030713',\r\n",
+					"    VaReleaseDate='07-25-2017',\r\n",
+					"    OnlineMovieId='300e034e-4260-49ed-85e2-39a8d5030713')]\r\n",
+					"```\r\n",
+					"\r\n",
+					"Above, we see that:  \r\n",
+					"  - Southridge has recorded a 2015 releaseYear for this movie\r\n",
+					"  - Southridge has recorded that the movie is available as of 25 Jul 2017\r\n",
+					"  - Southridge has recorded that the movie is available for streaming as of 19 Sep 2017\r\n",
+					"  - Fourth Coffee has recorded that the movie has a ReleaseDate of 25 Jul 2017\r\n",
+					"  - VanArsdel, Ltd. has similarly recorded the ReleaseDate as 25 Jul 2017\r\n",
+					"\r\n",
+					"It looks like Fourth Coffee is tracking the \"release\" in terms of when it became available to rent. Only Southridge Video has tracked the original theatrical release year. This detail was useful for their web-based front-end, but the brick and mortar stores previously had no business need for it.\r\n",
+					"\r\n",
+					"Each of the source system has stored dates in different formats, but we will use true date types in our conformed intermediate schema.\r\n",
+					"\r\n",
+					"> Note: We are not only parsing the dates here, but also adding a column to track the SourceSystemId"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"fc_catalog = fc_catalog \\\r\n",
+					"  .withColumn('ReleaseDate', F.to_date(col('ReleaseDate'), 'MM-dd-yyyy')) \\\r\n",
+					"  .withColumn('SourceSystemId', F.lit('FC'))\r\n",
+					"\r\n",
+					"va_catalog = va_catalog \\\r\n",
+					"  .withColumn('ReleaseDate', F.to_date(col('ReleaseDate'), 'MM-dd-yyyy')) \\\r\n",
+					"  .withColumn('SourceSystemId', F.lit('VA'))\r\n",
+					"\r\n",
+					"sr_catalog = sr_catalog \\\r\n",
+					"  .withColumn('availabilityDate', F.to_date(col('availabilityDate'), 'yyyy-MM-dd HH:mm:ss')) \\\r\n",
+					"  .withColumn('streamingAvailabilityDate', F.to_date(col('streamingAvailabilityDate'), 'yyyy-MM-dd HH:mm:ss')) \\\r\n",
+					"  .withColumn('SourceSystemId', F.lit('SR'))"
+				],
+				"execution_count": 6
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Unioning the data\r\n",
+					"\r\n",
+					"### Target schema\r\n",
+					"\r\n",
+					"Looking ahead, we will keep every source record from every catalog, so we don't need to join here.\r\n",
+					"However, we will need to map columns to a consistent schema.\r\n",
+					"\r\n",
+					"```\r\n",
+					"SourceSystemId:              Use the SourceSystemId we added in the previous cell.\r\n",
+					"CatalogId:                   Use a new unique identifier.\r\n",
+					"SourceSystemMovieId:         From Southridge, use the source id. From the others, use the source MovieId.\r\n",
+					"SouthridgeMovieId:           From Southridge, use the source id. From the others, use the source OnlineMovieId.\r\n",
+					"ActorID:                     From Southridge, this is null. From the others, it's the source ActorId.\r\n",
+					"ActorName:                   From Southridge, it's the exploded actor name. From the others, it is the ActorName.\r\n",
+					"ActorGender:                 Southridge does not track this data. The on premises stores have Gender.\r\n",
+					"Title:                       From Southridge, use title. From others, MovieTitle.\r\n",
+					"Genre:                       From Southridge, use genre. From others, Category.\r\n",
+					"Rating:                      Southridge has rating and the others have Rating.\r\n",
+					"RuntimeMinutes:              Southridge has runtime, the others have RunTimeMin.\r\n",
+					"TheatricalReleaseYear:       Southridge has releaseYear. The others don't have this data.\r\n",
+					"PhysicalAvailabilityDate:    Southridge has availabilityDate. The others have ReleaseDate.\r\n",
+					"StreamingAvailabilityDate:   Southridge has streamingAvailabilityDate. The others have no such data, as it does not apply to physical rentals.\r\n",
+					"```\r\n",
+					"\r\n",
+					"### To join, cleanse, drop duplicates, etc. ... or not?\r\n",
+					"\r\n",
+					"At this stage, we want to focus on the **fatal** anomalies that would cause exceptions in downstream processing;\r\n",
+					"e.g., inconsistent data types or formats.\r\n",
+					"If we were loading this data directly into a final reporting schema, we would likely apply additional cleansing such as:\r\n",
+					"\r\n",
+					"- Look for and eliminate typos, e.g., PGg instead of PG\r\n",
+					"- Normalize capitalization of titles, names, ratings, etc.\r\n",
+					"- Look for and resolve conflicts in matched movies, e.g., Southridge thinks Mysterious Cube is a G-rated family movie while VanArsdel, Ltd. had it as a PG-13 rated Comedy\r\n",
+					"- Look for variations in actor names and choose one to use consistently throughout the reporting schema, e.g., Vivica A. Fox vs Vivica Fox\r\n",
+					"- Drop duplicates\r\n",
+					"- etc., etc., etc.\r\n",
+					"\r\n",
+					"However, if we perform these operations now, then we may eliminate the opportunity to discover previously unrecognized value in the data.\r\n",
+					"As a contrived example, consider a possibility that some actors and actresses would occassionally use their middle initial, but sometimes would not.\r\n",
+					"Now, imagine that data scientists uncover a trend where films are more marketable when the cast does use their middle initial versus when they do not.\r\n",
+					"Or maybe that only holds true in the Drama genre, but it does not hold in Family movies.\r\n",
+					"If we have already chosen the person's \"usual\" billing and only kept that version in our conformed dataset,\r\n",
+					"the the data scientists would never be able to see this."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# This is used in the following cells to create a new unique identifier\r\n",
+					"\r\n",
+					"uuidUdf = F.udf(lambda : str(uuid.uuid4()), StringType())"
+				],
+				"execution_count": 7
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"sr_conformed = sr_catalog \\\r\n",
+					"  .select([ \\\r\n",
+					"    col(\"SourceSystemId\"), \\\r\n",
+					"    col(\"id\").alias(\"SourceSystemMovieId\"), \\\r\n",
+					"    col(\"id\").alias(\"SouthridgeMovieId\"), \\\r\n",
+					"    col(\"availabilityDate\").cast(TimestampType()).alias(\"PhysicalAvailabilityDate\"), \\\r\n",
+					"    col(\"streamingAvailabilityDate\").cast(TimestampType()).alias(\"StreamingAvailabilityDate\"), \\\r\n",
+					"    col(\"genre\").alias(\"Genre\"), \\\r\n",
+					"    col(\"title\").alias(\"Title\"), \\\r\n",
+					"    col(\"rating\").alias(\"Rating\"), \\\r\n",
+					"    col(\"runtime\").alias(\"RuntimeMinutes\"), \\\r\n",
+					"    col(\"releaseYear\").alias(\"TheatricalReleaseYear\"), \\\r\n",
+					"    sr_catalog[\"actor.name\"].alias(\"ActorName\")]) \\\r\n",
+					"  .withColumn(\"ActorId\", F.lit(None).cast(StringType())) \\\r\n",
+					"  .withColumn(\"ActorGender\", F.lit(None).cast(StringType())) \\\r\n",
+					"  .withColumn(\"CatalogId\", uuidUdf())"
+				],
+				"execution_count": 8
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"va_conformed = va_catalog \\\r\n",
+					"  .select([ \\\r\n",
+					"    col(\"SourceSystemId\"), \\\r\n",
+					"    col(\"MovieID\").alias(\"SourceSystemMovieId\"), \\\r\n",
+					"    col(\"OnlineMovieID\").alias(\"SouthridgeMovieId\"), \\\r\n",
+					"    col(\"ReleaseDate\").cast(TimestampType()).alias(\"PhysicalAvailabilityDate\"), \\\r\n",
+					"    F.lit(None).cast(TimestampType()).alias(\"StreamingAvailabilityDate\"), \\\r\n",
+					"    col(\"Category\").alias(\"Genre\"), \\\r\n",
+					"    col(\"MovieTitle\").alias(\"Title\"), \\\r\n",
+					"    col(\"Rating\").alias(\"Rating\"), \\\r\n",
+					"    col(\"RunTimeMin\").cast(LongType()).alias(\"RuntimeMinutes\"), \\\r\n",
+					"    F.lit(None).cast(LongType()).alias(\"TheatricalReleaseYear\"), \\\r\n",
+					"    col(\"ActorName\"), \\\r\n",
+					"    col(\"MovieActorID\").alias(\"ActorID\"), \\\r\n",
+					"    col(\"Gender\").alias(\"ActorGender\")]) \\\r\n",
+					"  .withColumn(\"CatalogId\", uuidUdf())"
+				],
+				"execution_count": 9
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"fc_conformed = fc_catalog \\\r\n",
+					"  .select([ \\\r\n",
+					"    col(\"SourceSystemId\"), \\\r\n",
+					"    col(\"MovieID\").alias(\"SourceSystemMovieId\"), \\\r\n",
+					"    col(\"OnlineMovieID\").alias(\"SouthridgeMovieId\"), \\\r\n",
+					"    col(\"ReleaseDate\").cast(TimestampType()).alias(\"PhysicalAvailabilityDate\"), \\\r\n",
+					"    F.lit(None).cast(TimestampType()).alias(\"StreamingAvailabilityDate\"), \\\r\n",
+					"    col(\"Category\").alias(\"Genre\"), \\\r\n",
+					"    col(\"MovieTitle\").alias(\"Title\"), \\\r\n",
+					"    col(\"Rating\").alias(\"Rating\"), \\\r\n",
+					"    col(\"RunTimeMin\").cast(LongType()).alias(\"RuntimeMinutes\"), \\\r\n",
+					"    F.lit(None).cast(LongType()).alias(\"TheatricalReleaseYear\"), \\\r\n",
+					"    col(\"ActorName\"), \\\r\n",
+					"    col(\"MovieActorID\").alias(\"ActorID\"), \\\r\n",
+					"    col(\"Gender\").alias(\"ActorGender\")]) \\\r\n",
+					"  .withColumn(\"CatalogId\", uuidUdf())"
+				],
+				"execution_count": 10
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"The full catalog is now a straightforward union"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"full_catalog = sr_conformed.union(va_conformed).union(fc_conformed)\r\n",
+					"full_catalog.write.mode(\"overwrite\").parquet(\"abfss://conformed@datalakesouthridgerbr.dfs.core.windows.net/catalog\")"
+				],
+				"execution_count": 11
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"Let's rehydrate and confirm that everything checks out"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"rehydrated_catalog = spark.read.parquet(\"abfss://conformed@datalakesouthridgerbr.dfs.core.windows.net/catalog\")\r\n",
+					"\r\n",
+					"sr_rehydrated = rehydrated_catalog.filter(\"SourceSystemID=='SR'\")\r\n",
+					"\r\n",
+					"sr_actors_per_movie = sr_rehydrated \\\r\n",
+					"  .groupby(col('SourceSystemMovieId')) \\\r\n",
+					"  .agg(F.count(F.lit(1)).alias('ActorCount'))\r\n",
+					"\r\n",
+					"print('The number of rows from Southridge is ', sr_rehydrated.count())\r\n",
+					"print('The number of distinct movies from Southridge is', sr_actors_per_movie.count())\r\n",
+					"print(sr_actors_per_movie.limit(1).collect())"
+				],
+				"execution_count": 12
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					""
+				],
+				"execution_count": null
+			}
+		]
+	}
+}

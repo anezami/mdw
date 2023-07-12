@@ -1,0 +1,126 @@
+{
+	"name": "Connect_To_DataSet",
+	"properties": {
+		"folder": {
+			"name": "EDLauth"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "c3511314-2f71-42ff-afdb-94aa9414a5b0"
+			}
+		},
+		"metadata": {
+			"saveOutput": false,
+			"enableDebugMode": false,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "Synapse PySpark"
+			},
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"outputs_hidden": false,
+						"source_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"tags": [
+						"parameters"
+					]
+				},
+				"source": [
+					"# Dataset\n",
+					"source = 'google-analytics-productlevel'\n",
+					"dataSet = 'ga_profiles/hitlevel_fundr'\n",
+					"version = '1'\n",
+					"\n",
+					"# Partition = date=YYYY-MM-DD for CfM\n",
+					"# Partition = date=YYYYMMDD for google-analytics-productlevel\n",
+					"partition = 'date=20220505'"
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"collapsed": false
+				},
+				"source": [
+					"spark.conf.set(\"spark.storage.synapse.linkedServiceName\", \"EDL_DataLake_Prod\")\n",
+					"spark.conf.set(\"fs.azure.account.oauth.provider.type\", \"com.microsoft.azure.synapse.tokenlibrary.LinkedServiceBasedTokenProvider\")\n",
+					"\n",
+					"df = spark.read.parquet('abfss://'+ source +'@<datalakeGen2>.dfs.core.windows.net/'+ dataSet +'/'+ version +'/data/'+ partition +'/*.parquet')\n",
+					"\n",
+					"display(df.limit(10))\n",
+					""
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"outputs_hidden": false,
+						"source_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df.createOrReplaceTempView (\"Test_View\")"
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"outputs_hidden": false,
+						"source_hidden": false
+					},
+					"microsoft": {
+						"language": "sparksql"
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"%%sql\n",
+					"\n",
+					"select  *\n",
+					"from Test_View\n",
+					"limit 100\n",
+					""
+				],
+				"execution_count": null
+			}
+		]
+	}
+}

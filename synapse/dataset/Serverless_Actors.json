@@ -1,0 +1,34 @@
+{
+	"name": "Serverless_Actors",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "SynapseServerless",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "ActorSK",
+				"type": "bigint",
+				"precision": 19
+			},
+			{
+				"name": "ActorID",
+				"type": "uniqueidentifier"
+			},
+			{
+				"name": "ActorName",
+				"type": "varchar"
+			},
+			{
+				"name": "Gender",
+				"type": "varchar"
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "vw_actors"
+		}
+	}
+}

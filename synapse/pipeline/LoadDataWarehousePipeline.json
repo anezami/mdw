@@ -1,0 +1,100 @@
+{
+	"name": "LoadDataWarehousePipeline",
+	"properties": {
+		"activities": [
+			{
+				"name": "Copy DimActors",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "SqlPoolSink",
+						"preCopyScript": "TRUNCATE TABLE [dbo].[DimActors] ",
+						"allowCopyCommand": true
+					},
+					"enableStaging": true,
+					"stagingSettings": {
+						"linkedServiceName": {
+							"referenceName": "southridgesynapse02-WorkspaceDefaultStorage",
+							"type": "LinkedServiceReference"
+						}
+					},
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "ActorSK",
+									"type": "Int64"
+								},
+								"sink": {
+									"name": "ActorSK",
+									"type": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "ActorID",
+									"type": "Guid"
+								},
+								"sink": {
+									"name": "ActorID",
+									"type": "Guid"
+								}
+							},
+							{
+								"source": {
+									"name": "ActorName",
+									"type": "String"
+								},
+								"sink": {
+									"name": "ActorName",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Gender",
+									"type": "String"
+								},
+								"sink": {
+									"name": "ActorGender",
+									"type": "String"
+								}
+							}
+						]
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Serverless_Actors",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "SqlPoolTableDimActors",
+						"type": "DatasetReference"
+					}
+				]
+			}
+		],
+		"folder": {
+			"name": "Challenge 05"
+		},
+		"annotations": []
+	}
+}

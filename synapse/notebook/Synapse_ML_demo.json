@@ -1,0 +1,329 @@
+{
+	"name": "Synapse_ML_demo",
+	"properties": {
+		"folder": {
+			"name": "Additional"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "SparkPool",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "56g",
+			"driverCores": 8,
+			"executorMemory": "56g",
+			"executorCores": 8,
+			"numExecutors": 4,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "4",
+				"spark.dynamicAllocation.maxExecutors": "4",
+				"spark.autotune.trackingId": "9552b6cb-3d2f-429c-811b-5591db91cc56"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"enableDebugMode": false,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "Synapse PySpark"
+			},
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/513a7987-b0d9-4106-a24d-4b3f49136ea8/resourceGroups/mdw-oh-rbr-westeurope/providers/Microsoft.Synapse/workspaces/southridgesynapserbr/bigDataPools/SparkPool",
+				"name": "SparkPool",
+				"type": "Spark",
+				"endpoint": "https://southridgesynapserbr.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/SparkPool",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net"
+				},
+				"sparkVersion": "2.4",
+				"nodeCount": 10,
+				"cores": 8,
+				"memory": 56,
+				"automaticScaleJobs": false
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"import os\n",
+					"import urllib\n",
+					"import pprint\n",
+					"import numpy as np\n",
+					"import time\n",
+					"\n",
+					"from pyspark.ml import Pipeline, PipelineModel\n",
+					"from pyspark.ml.feature import OneHotEncoder, StringIndexer, VectorAssembler\n",
+					"from pyspark.ml.classification import LogisticRegression, DecisionTreeClassifier\n",
+					"from pyspark.ml.evaluation import BinaryClassificationEvaluator\n",
+					"from pyspark.ml.tuning import CrossValidator, ParamGridBuilder"
+				],
+				"execution_count": 3
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"#%%spark\n",
+					"# SQLDW inside Synapse analytics\n",
+					"#val df = spark.read.sqlanalytics(\"sqldb.dbo.AdultCensusIncome4\") \n",
+					"#df.createOrReplaceTempView(\"AdultCensusIncome4\")"
+				],
+				"execution_count": 6
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"microsoft": {
+						"language": "scala"
+					}
+				},
+				"source": [
+					"%%spark\n",
+					"// SQLDW outside Synapse analytics. In this example, SQLDW table data originates from csv in this folder: AdultCensusIncome_withheader.csv. Make sure that the Synapse Workspace MI is registered as external user in the external SQLDWimport com.microsoft.spark.sqlanalytics.utils.Constants\n",
+					"import org.apache.spark.sql.SqlAnalyticsConnector._\n",
+					"\n",
+					"val df = spark.read.\n",
+					"option(Constants.SERVER, \"test-edlprod1-dbs.database.windows.net\").\n",
+					"sqlanalytics(\"test-synapse-sqldw.dbo.AdultCensusIncome4\")\n",
+					"df.createOrReplaceTempView(\"AdultCensusIncome4\")"
+				],
+				"execution_count": 4
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"from pyspark.ml.recommendation import ALS\n",
+					"from pyspark.sql import Row"
+				],
+				"execution_count": 7
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"# To be able to complete this lab in under an hour, let's just work with 1,500k rows\n",
+					"data_all = spark.sql(\"SELECT * FROM AdultCensusIncome4\").limit(15000000)\n",
+					"#sample.createOrReplaceTempView(\"AdultCensusIncome\")\n",
+					"\n",
+					"columns_new = [col.replace(\"-\", \"\") for col in data_all.columns]\n",
+					"data_all = data_all.toDF(*columns_new)"
+				],
+				"execution_count": 8
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"data_all.printSchema()"
+				],
+				"execution_count": 9
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"diagram": {
+						"activateDiagramType": 1,
+						"chartConfig": {
+							"category": "bar",
+							"keys": [
+								"workclass"
+							],
+							"values": [
+								"age"
+							],
+							"yLabel": "age",
+							"xLabel": "workclass",
+							"aggregation": "SUM",
+							"aggByBackend": false
+						},
+						"aggData": "\"{\\\"age\\\":{\\\" ?\\\":25,\\\" Private\\\":233,\\\" Self-emp-not-inc\\\":67,\\\" State-gov\\\":35}}\"",
+						"isSummary": false,
+						"previewData": {
+							"filter": null
+						},
+						"isSql": false
+					},
+					"collapsed": false
+				},
+				"source": [
+					"display(data_all.limit(10))"
+				],
+				"execution_count": 10
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"import datetime\n",
+					"import azureml.core\n",
+					"from azureml.core import Workspace\n",
+					"from azureml.core.run import Run\n",
+					"from azureml.core.experiment import Experiment\n",
+					"\n",
+					"# Check core SDK version number\n",
+					"print(\"SDK version:\", azureml.core.VERSION)\n",
+					"\n",
+					"workspace=\"<<your AzureML workspace>>\"\n",
+					"subscription_id=\"<<your subscription>>\"\n",
+					"resource_grp=\"<<your response group>>\"\n",
+					"\n",
+					"experiment_name = \"experiment_model_release_synapse\"\n",
+					"model_name_run = datetime.datetime.now().strftime(\"%Y%m%d%H%M%S\")+ \"_dbrmod_synapse.mml\" # in case you want to change the name, keep the .mml extension\n",
+					"model_name = \"databricksmodelsynapse.mml\" # in case you want to change the name, keep the .mml extension\n",
+					"\n",
+					"#\n",
+					"# Step 1: Run notebook using Databricks Compute in AML SDK\n",
+					"#\n",
+					"\n",
+					"ws = Workspace(workspace_name = workspace,\n",
+					"               subscription_id = subscription_id,\n",
+					"               resource_group = resource_grp)\n",
+					"\n",
+					"ws.get_details()\n",
+					"\n",
+					"print('Workspace name: ' + ws.name, \n",
+					"      'Azure region: ' + ws.location, \n",
+					"      'Subscription id: ' + ws.subscription_id, \n",
+					"      'Resource group: ' + ws.resource_group, sep = '\\n')"
+				],
+				"execution_count": 12
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"import os\n",
+					"import urllib\n",
+					"import pprint\n",
+					"import numpy as np\n",
+					"import shutil\n",
+					"import time\n",
+					"\n",
+					"from pyspark.ml import Pipeline, PipelineModel\n",
+					"from pyspark.ml.feature import OneHotEncoder, OneHotEncoderEstimator, StringIndexer, VectorAssembler\n",
+					"from pyspark.ml.classification import LogisticRegression, DecisionTreeClassifier\n",
+					"from pyspark.ml.evaluation import BinaryClassificationEvaluator\n",
+					"from pyspark.ml.tuning import CrossValidator, ParamGridBuilder\n",
+					"\n",
+					"categoricalColumns = [\"workclass\", \"education\", \"maritalstatus\", \"occupation\", \"relationship\", \"race\", \"sex\", \"nativecountry\"]\n",
+					"stages = [] # stages in our Pipeline\n",
+					"for categoricalCol in categoricalColumns:\n",
+					"    # Category Indexing with StringIndexer\n",
+					"    stringIndexer = StringIndexer(inputCol=categoricalCol, outputCol=categoricalCol + \"Index\")\n",
+					"    # Use OneHotEncoder to convert categorical variables into binary SparseVectors\n",
+					"    # encoder = OneHotEncoderEstimator(inputCol=categoricalCol + \"Index\", outputCol=categoricalCol + \"classVec\")\n",
+					"    encoder = OneHotEncoderEstimator(inputCols=[stringIndexer.getOutputCol()], outputCols=[categoricalCol + \"classVec\"])\n",
+					"    # Add stages.  These are not run here, but will run all at once later on.\n",
+					"    stages += [stringIndexer, encoder]\n",
+					"    \n",
+					"    \n",
+					"# Convert label into label indices using the StringIndexer\n",
+					"label_stringIdx = StringIndexer(inputCol=\"income\", outputCol=\"label\")\n",
+					"stages += [label_stringIdx]\n",
+					"\n",
+					"# Transform all features into a vector using VectorAssembler\n",
+					"numericCols = [\"age\", \"fnlwgt\", \"educationnum\", \"capitalgain\", \"capitalloss\", \"hoursperweek\"]\n",
+					"assemblerInputs = [c + \"classVec\" for c in categoricalColumns] + numericCols\n",
+					"assembler = VectorAssembler(inputCols=assemblerInputs, outputCol=\"features\")\n",
+					"stages += [assembler]\n",
+					"\n",
+					"partialPipeline = Pipeline().setStages(stages)\n",
+					"pipelineModel = partialPipeline.fit(data_all)\n",
+					"preppedDataDF = pipelineModel.transform(data_all)\n",
+					"\n",
+					"selectedcols = [\"label\", \"features\"] + [\"income\"] + categoricalColumns + numericCols\n",
+					"dataset = preppedDataDF.select(selectedcols)\n",
+					"\n",
+					"(trainingData, testData) = dataset.randomSplit([0.7, 0.3], seed=122423)"
+				],
+				"execution_count": 13
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"myexperiment = Experiment(ws, experiment_name)\n",
+					"root_run = myexperiment.start_logging()"
+				],
+				"execution_count": 14
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"import os\n",
+					"\n",
+					"from pyspark.ml.classification import LogisticRegression\n",
+					"#regParam = [0,0.01, 0.5, 2.0]\n",
+					"regParam = [0]\n",
+					"# try a bunch of alpha values in a Linear Regression (Ridge) model\n",
+					"for reg in regParam:\n",
+					"    print(\"Regularization rate: {}\".format(reg))\n",
+					"    # create a bunch of child runs\n",
+					"    with root_run.child_run(\"reg-\" + str(reg)) as run:\n",
+					"        # create a new Logistic Regression model.\n",
+					"        \n",
+					"        lr = LogisticRegression(regParam=reg)\n",
+					"        \n",
+					"        # put together the pipeline\n",
+					"        pipe = Pipeline(stages=[lr])\n",
+					"\n",
+					"        # train the model\n",
+					"        model_pipeline = pipe.fit(trainingData)\n",
+					"        predictions = model_pipeline.transform(testData)\n",
+					"\n",
+					"        # evaluate. note only 2 metrics are supported out of the box by Spark ML.\n",
+					"        bce = BinaryClassificationEvaluator(rawPredictionCol='rawPrediction')\n",
+					"        au_roc = bce.setMetricName('areaUnderROC').evaluate(predictions)\n",
+					"        au_prc = bce.setMetricName('areaUnderPR').evaluate(predictions)\n",
+					"        truePositive = predictions.select(\"label\").filter(\"label = 1 and prediction = 1\").count()\n",
+					"        falsePositive = predictions.select(\"label\").filter(\"label = 0 and prediction = 1\").count()\n",
+					"        trueNegative = predictions.select(\"label\").filter(\"label = 0 and prediction = 0\").count()\n",
+					"        falseNegative = predictions.select(\"label\").filter(\"label = 1 and prediction = 0\").count()\n",
+					"\n",
+					"        # log reg, au_roc, au_prc and feature names in run history\n",
+					"        run.log(\"reg\", reg)\n",
+					"        run.log(\"au_roc\", au_roc)\n",
+					"        run.log(\"au_prc\", au_prc)\n",
+					"        \n",
+					"        print(\"Area under ROC: {}\".format(au_roc))\n",
+					"        print(\"Area Under PR: {}\".format(au_prc))\n",
+					"       \n",
+					"        run.log(\"truePositive\", truePositive)\n",
+					"        run.log(\"falsePositive\", falsePositive)\n",
+					"        run.log(\"trueNegative\", trueNegative)\n",
+					"        run.log(\"falseNegative\", falseNegative)\n",
+					"                                                                                                                                                                  \n",
+					"        print(\"TP: \" + str(truePositive) + \", FP: \" + str(falsePositive) + \", TN: \" + str(trueNegative) + \", FN: \" + str(falseNegative))                                                                         \n",
+					"        \n",
+					"        run.log_list(\"columns\", trainingData.columns)\n",
+					"\n",
+					"        # save model\n",
+					"\n",
+					"        #os.mkdir(\"deploymodel2\") \n",
+					"        #os.chdir(\"deploymodel4\")\n",
+					"        model_pipeline.write().overwrite().save(\"prod/\" + model_name)\n",
+					"        \n",
+					"        # Todo: upload the serialized model into AzureML, fix code below\n",
+					"        #mdl, ext = model_name.split(\".\")\n",
+					"        #shutil.make_archive(mdl, 'zip')\n",
+					"\n",
+					"        #model_zip = mdl + \".zip\"\n",
+					"        #run.upload_file(\"outputs/\" + model_name, model_zip)        \n",
+					"        #run.upload_file(\"outputs/\" + model_name, path_or_stream = model_dbfs) #cannot deal with folders\n",
+					""
+				],
+				"execution_count": 16
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					""
+				],
+				"execution_count": null
+			}
+		]
+	}
+}

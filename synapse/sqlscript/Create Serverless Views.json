@@ -1,0 +1,20 @@
+{
+	"name": "Create Serverless Views",
+	"properties": {
+		"folder": {
+			"name": "Challenge 05/original"
+		},
+		"content": {
+			"query": "--CREATE DATABASE southridgeserverless;\n--GO\n\nDROP VIEW IF EXISTS vw_actors;\nGO\n\nCREATE VIEW vw_actors AS\nSELECT DISTINCT\n    ROW_NUMBER() OVER (ORDER BY ActorName) AS ActorSK,\n    CAST(ActorID as UNIQUEIDENTIFIER) as ActorID,\n    ActorName,\n    Gender\nFROM\n    OPENROWSET(\n        BULK 'https://datalakesouthridgerbr.dfs.core.windows.net/conformed/actors',\n        FORMAT='PARQUET'\n    ) AS [result];\nGO",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "southridgeserverless",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

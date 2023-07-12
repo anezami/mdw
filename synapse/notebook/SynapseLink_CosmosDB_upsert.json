@@ -1,0 +1,246 @@
+{
+	"name": "SynapseLink_CosmosDB_upsert",
+	"properties": {
+		"folder": {
+			"name": "CosmosValidation"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "SparkPool",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "56g",
+			"driverCores": 8,
+			"executorMemory": "56g",
+			"executorCores": 8,
+			"numExecutors": 2,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "b051d807-9b9a-4837-bfe6-408873ac06d5"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"enableDebugMode": false,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "python"
+			},
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/513a7987-b0d9-4106-a24d-4b3f49136ea8/resourceGroups/mdw-oh-rbr-westeurope/providers/Microsoft.Synapse/workspaces/southridgesynapserbr/bigDataPools/SparkPool",
+				"name": "SparkPool",
+				"type": "Spark",
+				"endpoint": "https://southridgesynapserbr.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/SparkPool",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net"
+				},
+				"sparkVersion": "2.4",
+				"nodeCount": 10,
+				"cores": 8,
+				"memory": 56,
+				"automaticScaleJobs": false
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"outputs_hidden": false,
+						"source_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": true
+				},
+				"source": [
+					"# 0.  Initialization  \r\n",
+					"# \r\n",
+					"# 0.1. Create Cosmos DB container using the RetailDemo, see https://docs.microsoft.com/en-us/azure/cosmos-db/create-notebook-visualize-data\r\n",
+					"# 0.2. Configure Synapse Line to Cosmos DB, see  https://docs.microsoft.com/en-us/azure/cosmos-db/configure-synapse-link\r\n",
+					"# 0.3. Add card1.txt set to Storage account adhering to Azure Synapse Analytics\r\n",
+					"#      - card1.txt file can be found in git repo where this notebook is also stored\r\n",
+					"# 0.4. Add requirement.txt with azure-cosmos library to Spark pool. This is needed in last cell when data is upserted to Cosmos DB)\r\n",
+					"#      - requirement.txt can be found in git repo where this notebook is also stored\r\n",
+					"#      - See https://docs.microsoft.com/en-us/azure/synapse-analytics/spark/apache-spark-azure-portal-add-libraries     "
+				],
+				"execution_count": 1
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"collapsed": false
+				},
+				"source": [
+					"# 1. Create Dataframe from Cosmos DB analytics store HTAP. \n",
+					"#\n",
+					"# Notice that Spark uses lazy execution and command is only executed when display command. In a production scenario, display is not needed and the data is only fetched using the join\n",
+					"# \n",
+					"# Read from Cosmos DB analytical store into a Spark DataFrame and display 10 rows from the DataFrame\n",
+					"# To select a preferred list of regions in a multi-region Cosmos DB account, add .option(\"spark.cosmos.preferredRegions\", \"<Region1>,<Region2>\")\n",
+					"\n",
+					"dfcosmosdb = spark.read\\\n",
+					"    .format(\"cosmos.olap\")\\\n",
+					"    .option(\"spark.synapse.linkedService\", \"CosmosDbHTAP\")\\\n",
+					"    .option(\"spark.cosmos.container\", \"WebsiteData3\")\\\n",
+					"    .load()\n",
+					"\n",
+					"display(dfcosmosdb.limit(10))"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"outputs_hidden": false,
+						"source_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"# 2. Create Dataframe from Storage Account \r\n",
+					"\r\n",
+					"#%%pyspark\r\n",
+					"dfcsv = spark.read.csv('abfss://onpremcsv@testsynapserbrstor.dfs.core.windows.net/card1.txt', header='true')\r\n",
+					"display(dfcsv.limit(10))"
+				],
+				"execution_count": 3
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"outputs_hidden": false,
+						"source_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"# 3. Create join\r\n",
+					"\r\n",
+					"inner_join = dfcsv.join(dfcosmosdb, dfcsv.cardid == dfcosmosdb.CartID)\r\n",
+					"display(inner_join)"
+				],
+				"execution_count": 4
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"outputs_hidden": false,
+						"source_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": true
+				},
+				"source": [
+					"# 4. Create Python list from Spark Dataframe\r\n",
+					"\r\n",
+					"update_list = inner_join.select(\"cardid\", \"name\", \"id\", \"_etag\").toPandas().to_dict('records')\r\n",
+					"print(update_list)"
+				],
+				"execution_count": 5
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"outputs_hidden": false,
+						"source_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": true
+				},
+				"source": [
+					"# 5. Write data from cards.txt to Cosmos DB. \r\n",
+					"#\r\n",
+					"# Notice that upsert will only succeed if etag was not changed using match_condition=MatchConditions.IfNotModified\r\n",
+					"# This will happen if this cell is executed twice or more (without fetching the latest etag)\r\n",
+					"#\r\n",
+					"# See also https://azuresdkdocs.blob.core.windows.net/$web/python/azure-cosmos/4.0.0b5/azure.cosmos.html\r\n",
+					"#\r\n",
+					"from azure.cosmos import exceptions, CosmosClient, PartitionKey\r\n",
+					"endpoint = \"https://<<your url>>.documents.azure.com:443/\"\r\n",
+					"key = '<<your key>>'\r\n",
+					"database_name ='RetailDemo'\r\n",
+					"container_name = 'WebsiteData3'\r\n",
+					"\r\n",
+					"client = CosmosClient(endpoint, key)\r\n",
+					"database = client.get_database_client(database_name)\r\n",
+					"\r\n",
+					"database = client.get_database_client(database_name)\r\n",
+					"container = database.get_container_client(container_name)\r\n",
+					"\r\n",
+					"# Enumerate the returned items\r\n",
+					"import json\r\n",
+					"from azure.core import MatchConditions\r\n",
+					"\r\n",
+					"#response = container.delete_item(\"5481\", partition_key=\"5481\")\r\n",
+					"\r\n",
+					"for update_item in update_list:\r\n",
+					"    for item in container.query_items(\r\n",
+					"        query='SELECT * FROM WebsiteData3 c where c.CartID = ' + update_item['cardid'] + ' AND c.id = \"' + update_item['id'] + '\"',\r\n",
+					"        enable_cross_partition_query=True):\r\n",
+					"        print(json.dumps(item, indent=True))\r\n",
+					"        #print(update_item[\"_etag\"])\r\n",
+					"        #print (item[\"_etag\"])\r\n",
+					"        item['UserName'] = update_item['name'] + \"_updated2\"\r\n",
+					"        response = container.upsert_item(body=item, etag= update_item['_etag'], match_condition=MatchConditions.IfNotModified)\r\n",
+					"\r\n",
+					"        #print(json.dumps(item, indent=True))"
+				],
+				"execution_count": 6
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"outputs_hidden": false,
+						"source_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": true
+				},
+				"source": [
+					""
+				],
+				"execution_count": null
+			}
+		]
+	}
+}

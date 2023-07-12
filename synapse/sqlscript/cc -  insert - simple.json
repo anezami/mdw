@@ -1,0 +1,20 @@
+{
+	"name": "cc -  insert - simple",
+	"properties": {
+		"folder": {
+			"name": "Challenge 05/consolidated customer"
+		},
+		"content": {
+			"query": "SELECT ActiveFlag, count(*) aantal, LastName, FirstName, AddressLine1 FROM [dbo].[DimCustomers]\nGROUP BY LastName, FirstName, AddressLine1, ActiveFlag\nORDER BY ActiveFlag DESC, aantal DESC\n\n--SELECT DISTINCT cc.LastName, cc.* FROM [dbo].[DimCustomersStaging] cc\n--WHERE LastName = 'Leonas' AND FirstNAme = 'Rubis'\n\nTRUNCATE TABLE [dbo].[DimCustomers]\n--\nINSERT INTO [dbo].[DimCustomers]\nSELECT 100000000 + ROW_NUMBER () OVER (ORDER BY CustomerID)  as [CustomerSK], [CustomerID], [LastName], [FirstName], [AddressLine1], [AddressLine2], [City], [State], [ZipCode], [PhoneNumber], '2021-09-29 21:31:00' as [RecordStartDate], NULL as [RecordEndDate], 1 as [ActiveFlag] \nFROM [dbo].[DimCustomersStaging]\nWHERE SourceSystemId = 'FC'\n  AND NOT EXISTS (SELECT 1 FROM [dbo].[DimCustomers] dc WHERE dc.LastName = LastName AND dc.FirstName = FirstName AND dc.AddressLine1 = AddressLine1 AND [ActiveFlag] = 1)\n--\nINSERT INTO [dbo].[DimCustomers]\nSELECT 200000000 + ROW_NUMBER () OVER (ORDER BY CustomerID)  as [CustomerSK], [CustomerID], [LastName], [FirstName], [AddressLine1], [AddressLine2], [City], [State], [ZipCode], [PhoneNumber], '2021-09-29 21:31:00' as [RecordStartDate], NULL as [RecordEndDate], 1 as [ActiveFlag] \nFROM [dbo].[DimCustomersStaging]\nWHERE SourceSystemId = 'SR'\n  AND NOT EXISTS (SELECT 1 FROM [dbo].[DimCustomers] dc WHERE dc.LastName = LastName AND dc.FirstName = FirstName AND dc.AddressLine1 = AddressLine1 AND [ActiveFlag] = 1)\n--\nINSERT INTO [dbo].[DimCustomers]\nSELECT 300000000 + ROW_NUMBER () OVER (ORDER BY CustomerID)  as [CustomerSK], [CustomerID], [LastName], [FirstName], [AddressLine1], [AddressLine2], [City], [State], [ZipCode], [PhoneNumber], '2021-09-29 21:31:00' as [RecordStartDate], NULL as [RecordEndDate], 1 as [ActiveFlag] \nFROM [dbo].[DimCustomersStaging]\nWHERE SourceSystemId = 'VA'\n  AND NOT EXISTS (SELECT 1 FROM [dbo].[DimCustomers] dc WHERE dc.LastName = LastName AND dc.FirstName = FirstName AND dc.AddressLine1 = AddressLine1 AND [ActiveFlag] = 1)\n--\nUPDATE [dbo].[DimCustomers]\nSET [ActiveFlag] = 0\nWHERE EXISTS (SELECT 1 FROM [dbo].[DimCustomers] dc \n              WHERE dc.LastName = LastName \n                AND dc.FirstName = FirstName \n                AND dc.AddressLine1 = AddressLine1)\n\n-- Proof there are no duplicates\nSELECT count(*) aantal, FirstName, LastName, AddressLine1, AddressLine2, City, State, ZipCode, PhoneNumber, RecordStartDate, RecordEndDate, ActiveFlag FROM [dbo].[DimCustomers]\nGROUP BY LastName, FirstName, AddressLine1, AddressLine2, City, State, ZipCode, PhoneNumber, RecordStartDate, RecordEndDate, ActiveFlag\nORDER BY aantal ASC, FirstName ASC, LastName ASC, AddressLine1 ASC\n--\n/*\nSELECT TOP (100) [CustomerSK]\n,[CustomerID]\n,[LastName]\n,[FirstName]\n,[AddressLine1]\n,[AddressLine2]\n,[City]\n,[State]\n,[ZipCode]\n,[PhoneNumber]\n,[RecordStartDate]\n,[RecordEndDate]\n,[ActiveFlag]\nFROM [dbo].[DimCustomers]\nORDER BY [CustomerSK]\n*/",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "sqlpool",
+				"poolName": "sqlpool"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

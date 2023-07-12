@@ -1,0 +1,24 @@
+{
+	"name": "VanArsdelLtdSqlTableDataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "VanArsdelSqlServer",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"tableName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "SqlServerTable",
+		"schema": [],
+		"typeProperties": {
+			"tableName": {
+				"value": "@dataset().tableName",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

@@ -1,0 +1,20 @@
+{
+	"name": "Delta_lake_query_table",
+	"properties": {
+		"folder": {
+			"name": "delta_lake"
+		},
+		"content": {
+			"query": "SELECT TOP 10 *\nFROM OPENROWSET(\n    BULK 'https://testedlprod1stor.blob.core.windows.net/deltalakeproducer/moviedata/snapshot/',\n    FORMAT = 'delta') VERSION AS OF 1\nWHERE version != 4; ",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "master",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

@@ -1,0 +1,104 @@
+{
+	"name": "FourthCoffeeFileSystemPipeline",
+	"properties": {
+		"activities": [
+			{
+				"name": "ForEach_File",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.files",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "CopyFromFileSystem",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "FileServerReadSettings",
+										"recursive": true
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings"
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "FourthCoffeeFileSystemDataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"fileName": {
+											"value": "@item()",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DataLakeBinary",
+									"type": "DatasetReference",
+									"parameters": {
+										"tableName": {
+											"value": "@item()",
+											"type": "Expression"
+										},
+										"filePath": {
+											"value": "@pipeline().parameters.destinationFolder",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"files": {
+				"type": "array",
+				"defaultValue": [
+					"Actors.csv",
+					"Customers.csv",
+					"MovieActors.csv",
+					"Movies.csv",
+					"OnlineMovieMappings.csv",
+					"Transactions.csv"
+				]
+			},
+			"destinationFolder": {
+				"type": "string",
+				"defaultValue": "raw/FourthCoffee"
+			}
+		},
+		"folder": {
+			"name": "Challenge 03"
+		},
+		"annotations": [],
+		"lastPublishTime": "2021-09-13T09:52:30Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

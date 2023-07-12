@@ -1,0 +1,415 @@
+{
+	"name": "test",
+	"properties": {
+		"folder": {
+			"name": "SynapsePerformanceIssue"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "b24ce9d6-3353-4a20-af29-e00bf988bf98"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"enableDebugMode": false,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "python"
+			},
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": [
+					"from pyspark.sql.functions import lower, to_date, lit, col, lpad, broadcast, concat, upper, coalesce, unix_timestamp, date_format, to_timestamp, array_distinct, split, explode, trim, min, count, dense_rank, asc, when\r\n",
+					"from pyspark.sql.window import Window"
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def getLatestFolder(folder_path):\r\n",
+					"    folders = mssparkutils.fs.ls(folder_path)\r\n",
+					"    latest_folder = folders.pop()\r\n",
+					"\r\n",
+					"    if latest_folder.isDir:\r\n",
+					"        return '{}/{}/*.parquet'.format(folder_path,latest_folder.name)"
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def getLatestFile(file_path):\r\n",
+					"    files = mssparkutils.fs.ls(file_path)\r\n",
+					"    latest_file = files.pop()\r\n",
+					"    \r\n",
+					"    if latest_file.isFile:      \r\n",
+					"        return '{}/{}'.format(file_path,latest_file.name)\r\n",
+					""
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#Load datasets\r\n",
+					"#Load EDL datasets\r\n",
+					"#Set default storage location to EDL storage account\r\n",
+					"spark.conf.set('spark.storage.synapse.linkedServiceName', 'ls_adls_edl')\r\n",
+					"spark.conf.set('fs.azure.account.oauth.provider.type', 'com.microsoft.azure.synapse.tokenlibrary.LinkedServiceBasedTokenProvider')\r\n",
+					"\r\n",
+					"#Load latest head household dataset\r\n",
+					"head_household_adls_path = getLatestFolder('abfss://dih-distribution@edlcorestdeuprod0001.dfs.core.windows.net/HH_CMPOS_ADS/data')\r\n",
+					"df_head_household = spark.read.parquet(head_household_adls_path)\r\n",
+					"\r\n",
+					"#Load latest head commerical group dataset\r\n",
+					"commercial_group_adls_path = getLatestFolder('abfss://dih-distribution@edlcorestdeuprod0001.dfs.core.windows.net/STO_GGM_CG_CMPOS_ADS/data')\r\n",
+					"df_commercial_group = spark.read.parquet(commercial_group_adls_path)\r\n",
+					"\r\n",
+					"#Load latest EBX MPD Pega product mapping\r\n",
+					"ebx_pega_product_mappping_adls_path = getLatestFile('abfss://ebx@edlcorestdeuprod0001.dfs.core.windows.net/EBX_MPD_Pega_product_map/data')\r\n",
+					"df_ebx_mpd_pega_product_mapping = spark.read.parquet(ebx_pega_product_mappping_adls_path)\r\n",
+					"\r\n",
+					"#Load latest EBX MPD Google Analytics product mapping\r\n",
+					"ebx_google_analytics_product_mappping_adls_path = getLatestFile('abfss://ebx@edlcorestdeuprod0001.dfs.core.windows.net/EBX_MPD_GA_product_map/data')\r\n",
+					"df_ebx_google_analytics_product_mappping = spark.read.parquet(ebx_google_analytics_product_mappping_adls_path)\r\n",
+					"\r\n",
+					"#Load Pega interaction history from EDL\r\n",
+					"pega_interaction_history_edl_adls_path = 'abfss://pega-marketing@edlcorestdeuprod0001.dfs.core.windows.net/ih-data/2/data/EDL_LOAD_DT=*/*.parquet'\r\n",
+					"df_pega_interaction_history_edl = spark.read.parquet(pega_interaction_history_edl_adls_path)\r\n",
+					"\r\n",
+					"#Load staging datasets\r\n",
+					"#Set default storage location to staging storage account\r\n",
+					"spark.conf.set('spark.storage.synapse.linkedServiceName', 'ls_adls_staging')\r\n",
+					"spark.conf.set('fs.azure.account.oauth.provider.type', 'com.microsoft.azure.synapse.tokenlibrary.LinkedServiceBasedTokenProvider')\r\n",
+					"\r\n",
+					"#Load MPD google analytics data\r\n",
+					"#Access denied error\r\n",
+					"mpd_google_analytics_adls_path = 'abfss://x239-marketing-performance@dtobistagingpreprd01.dfs.core.windows.net/staging/google_analytics/campaigns_conversions/date=*/*.parquet'\r\n",
+					"df_mpd_google_analytics = spark.read.parquet(mpd_google_analytics_adls_path)\r\n",
+					"\r\n",
+					"#Load input datasets\r\n",
+					"#Set default storage location to input storage account\r\n",
+					"spark.conf.set('spark.storage.synapse.linkedServiceName', 'ls_adls_input')\r\n",
+					"spark.conf.set('fs.azure.account.oauth.provider.type', 'com.microsoft.azure.synapse.tokenlibrary.LinkedServiceBasedTokenProvider')\r\n",
+					"\r\n",
+					"#Load Pega interaction history from input\r\n",
+					"pega_interaction_history_input_adls_path = 'abfss://source-pega-interaction@dtobiinputpreprd01.dfs.core.windows.net/pegainteractionhist/1/data/date=*/*.parquet'\r\n",
+					"df_pega_interaction_history_input = spark.read.parquet(pega_interaction_history_input_adls_path)\r\n",
+					"\r\n",
+					"#Load Pega propositie inzage\r\n",
+					"pega_propositie_inzage_adls_path = 'abfss://source-bidm-marketingperformance@dtobiinputpreprd01.dfs.core.windows.net/propositie_inzage/1/data/*.parquet'\r\n",
+					"df_pega_propositie_inzage = spark.read.parquet(pega_propositie_inzage_adls_path)\r\n",
+					""
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_head_household = df_head_household.filter(lower(df_head_household.HD_HH_REL_ID) != 'unspecified').select('REL_ID','HD_HH_REL_ID')\r\n",
+					"df_commercial_group = df_commercial_group.select('REL_ID','HD_CG_REL_ID')\r\n",
+					"\r\n",
+					"df_pega_interaction_history_input = df_pega_interaction_history_input.filter(\r\n",
+					"    (to_date(col('pxOutcomeTime')) >= to_date(lit('2021-01-01'))) &\r\n",
+					"    (to_date(col('pxOutcomeTime')) <= to_date(lit('2022-05-12'))) &\r\n",
+					"    (lower(col('pyChannel')).isin('rks', 'kmi')) &\r\n",
+					"    (lower(col('pyOutcome')) == 'accepted')\r\n",
+					")\r\n",
+					"\r\n",
+					"df_pega_interaction_history_input = df_pega_interaction_history_input.select('offercode','pychannel','pxoutcometime','customer_id')\r\n",
+					"\r\n",
+					"df_pega_interaction_history_edl = df_pega_interaction_history_edl.filter(\r\n",
+					"    (to_date(col('pxOutcomeTime')) >= to_date(lit('2022-05-13'))) &\r\n",
+					"    (lower(col('pyChannel')).isin('rks', 'kmi')) &\r\n",
+					"    (lower(col('pyOutcome')) == 'accepted')\r\n",
+					")\r\n",
+					"df_pega_interaction_history_edl = df_pega_interaction_history_edl.select('offercode','pychannel','pxoutcometime','customer_id')\r\n",
+					"\r\n",
+					"\r\n",
+					"df_pega_interaction_history = df_pega_interaction_history_input.union(df_pega_interaction_history_edl)\r\n",
+					"df_pega_propositie_inzage = df_pega_propositie_inzage.select('Propositiecode','Productnaam')\r\n",
+					"df_ebx_mpd_pega_product_mapping = df_ebx_mpd_pega_product_mapping.select('PEGA_PRODUCT','PLV_PRODUCT')\r\n",
+					"\r\n",
+					"df_pih_product =     df_pega_interaction_history.join(\r\n",
+					"        df_pega_propositie_inzage,\r\n",
+					"        (lower(df_pega_interaction_history.offercode) ==  lower(df_pega_propositie_inzage.Propositiecode)),'inner'\r\n",
+					"    )\r\n",
+					"\r\n",
+					"df_pih_product_value =     df_pih_product.join(\r\n",
+					"        broadcast(df_ebx_mpd_pega_product_mapping),\r\n",
+					"        (lower(df_pih_product.Productnaam) ==  lower(df_ebx_mpd_pega_product_mapping.PEGA_PRODUCT)),'left'\r\n",
+					"    )\r\n",
+					"\r\n",
+					"df_pih_product_value_head_household =     df_pih_product_value.join(\r\n",
+					"        broadcast(df_head_household),\r\n",
+					"        (lpad(df_pih_product_value.customer_id,15,'0') == df_head_household.REL_ID),'left'\r\n",
+					"    )\r\n",
+					"\r\n",
+					"df_pih_product_value_head_household_commercial_group =     df_pih_product_value_head_household.join(\r\n",
+					"        broadcast(df_commercial_group),\r\n",
+					"        (lpad(df_pih_product_value_head_household.customer_id,15,'0') == df_head_household.REL_ID),'left'\r\n",
+					"    )\r\n",
+					"   \r\n",
+					""
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_pih_product_value_head_household_commercial_group = df_pih_product_value_head_household_commercial_group     .withColumn('AssistingCampaignKey',upper(concat(lit('PGM'),col('offercode'))))     .withColumn('CampaignKey',upper(concat(lit('PGM'),col('offercode'))))     .withColumn('GoalKey',lit(None))     .withColumn('LeadChannelKey',upper(col('pychannel')))     .withColumn('LeadDateKey',to_date(col('pxoutcometime')))     .withColumn('LeadProductKey',col('PLV_PRODUCT').cast('Integer').cast('String'))     .withColumn('IsLeadStarted',lit(0))     .withColumn('IsLeadCompleted',lit(0))     .withColumn('SourceSystem',lit('PEGA'))     .withColumn('SourceDomain',lit('RKS+K&MI'))     .withColumn('SourceHeadCustomerGroup',coalesce(col('HD_CG_REL_ID'),col('HD_HH_REL_ID'),lpad(col('customer_id'),15,'0')))     .withColumn('SourceLinkedCustomerNumber',lpad(col('customer_id'),15,'0'))     .withColumn('SourceVisitStartTime',to_timestamp(col('pxoutcometime'),'yyyy-MM-dd HH:mm:ss'))     .withColumn('SourceSessionId',concat(col('customer_id'),lit('|'),unix_timestamp(to_timestamp(col('pxoutcometime'),'yyyy-MM-dd HH:mm:ss')),date_format(to_timestamp(col('pxoutcometime'),'yyyy-MM-dd HH:mm:ss'), \"S\")))     .withColumn('SourceSessionSortOrder',lit(1))     .withColumn('SourceProduct',col('Productnaam'))\r\n",
+					"\r\n",
+					"\r\n",
+					"df_rks_and_k_and_mi =     df_pih_product_value_head_household_commercial_group.select(         'AssistingCampaignKey',\r\n",
+					"        'CampaignKey',\r\n",
+					"        'GoalKey',\r\n",
+					"        'LeadChannelKey',\r\n",
+					"        'LeadDateKey',\r\n",
+					"        'LeadProductKey',\r\n",
+					"        'IsLeadStarted',\r\n",
+					"        'IsLeadCompleted',\r\n",
+					"        'SourceSystem',\r\n",
+					"        'SourceDomain',\r\n",
+					"        'SourceHeadCustomerGroup',\r\n",
+					"        'SourceLinkedCustomerNumber',\r\n",
+					"        'SourceVisitStartTime',\r\n",
+					"        'SourceSessionId',\r\n",
+					"        'SourceSessionSortOrder',\r\n",
+					"        'SourceProduct')\r\n",
+					"\r\n",
+					"#df_rks_and_k_and_mi.head()\r\n",
+					""
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_mpd_ga_head_household =     df_mpd_google_analytics.join(\r\n",
+					"        broadcast(df_head_household),\r\n",
+					"        (df_mpd_google_analytics.linkedKlantnummer == df_head_household.REL_ID),'left'\r\n",
+					"    )\r\n",
+					"\r\n",
+					"df_mpd_ga_head_household_commercial_group =     df_mpd_ga_head_household.join(\r\n",
+					"        broadcast(df_commercial_group),\r\n",
+					"        (df_mpd_google_analytics.linkedKlantnummer == df_head_household.REL_ID),'left'\r\n",
+					"    )\r\n",
+					"\r\n",
+					"df_mpd_ga_head_household_commercial_group = df_mpd_ga_head_household_commercial_group     .withColumn('GAProduct',explode(array_distinct(split(col('product'),','))))     .withColumn('headCustomerGroup',coalesce(col('HD_CG_REL_ID'),col('HD_HH_REL_ID'),col('linkedKlantnummer')))\r\n",
+					""
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_conversions =     df_mpd_ga_head_household_commercial_group.select(\r\n",
+					"        'date',\r\n",
+					"        'sourcedomain',\r\n",
+					"        'visitStartTime',\r\n",
+					"        'sessionId',\r\n",
+					"        'firstHitNumber',\r\n",
+					"        'klantnummer',\r\n",
+					"        'linkedKlantnummer',\r\n",
+					"        'campaign',\r\n",
+					"        'promoId',\r\n",
+					"        'linkedPromoId',\r\n",
+					"        'promoName',\r\n",
+					"        'linkedPromoName',\r\n",
+					"        'channelGrouping',\r\n",
+					"        'goal',\r\n",
+					"        'application_steptype',\r\n",
+					"        'leadProcessSteptype',\r\n",
+					"        'isConversion',\r\n",
+					"        'conversionsCount',\r\n",
+					"        'headCustomerGroup',\r\n",
+					"        'GAProduct'      \r\n",
+					"        )\r\n",
+					"\r\n",
+					"df_conversions =     df_conversions.join(\r\n",
+					"        broadcast(df_ebx_google_analytics_product_mappping),\r\n",
+					"        (trim(lower(df_conversions.GAProduct)) == trim(lower(df_ebx_google_analytics_product_mappping.PRODUCTINGA))),'left'\r\n",
+					"    )\r\n",
+					""
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"windowSpec  = Window.partitionBy('sourcedomain','date','sessionId','visitStartTime','linkedKlantnummer','headCustomerGroup','channelGrouping','campaign','linkedPromoId','linkedPromoName','GAProduct','PRODUCT','goal')\r\n",
+					"df_conversions = df_conversions.withColumn(\"firstHitNumberForProductOrGoal\",min('firstHitNumber').over(windowSpec))\r\n",
+					""
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_conversions_pivot = df_conversions.groupBy('sourcedomain','date','sessionId','visitStartTime','linkedKlantnummer','headCustomerGroup','channelGrouping','campaign','linkedPromoId','linkedPromoName','firstHitNumberForProductOrGoal','GAProduct','PRODUCT','goal').pivot('leadProcessSteptype',['lead_started','lead_completed']).agg(count('leadProcessSteptype'))\r\n",
+					""
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"df_coversions_pivot = df_conversions_pivot     .withColumn('AssistingCampaignKey',col('campaign'))     .withColumn('CampaignKey',col('campaign'))     .withColumn('GoalKey',col('goal'))     .withColumn('LeadChannelKey',col('linkedPromoName'))     .withColumn('LeadDateKey',col('date'))     .withColumn('LeadProductKey',col('PRODUCT'))     .withColumn('IsLeadStarted',col('lead_started'))     .withColumn('IsLeadCompleted',col('lead_completed'))     .withColumn('SourceSystem',lit('GOOGLE'))     .withColumn('SourceDomain',col('sourcedomain'))     .withColumn('SourceHeadCustomerGroup',col('headCustomerGroup'))     .withColumn('SourceLinkedCustomerNumber',col('linkedKlantnummer'))     .withColumn('SourceVisitStartTime',to_timestamp(lit(None)))     .withColumn('SourceSessionId',col('sessionId'))     .withColumn('SourceSessionSortOrder',col('firstHitNumberForProductOrGoal'))     .withColumn('SourceProduct',col('GAProduct'))\r\n",
+					"\r\n",
+					"\r\n",
+					"df_coversions_pivot =     df_coversions_pivot.select(         'AssistingCampaignKey',\r\n",
+					"        'CampaignKey',\r\n",
+					"        'GoalKey',\r\n",
+					"        'LeadChannelKey',\r\n",
+					"        'LeadDateKey',\r\n",
+					"        'LeadProductKey',\r\n",
+					"        'IsLeadStarted',\r\n",
+					"        'IsLeadCompleted',\r\n",
+					"        'SourceSystem',\r\n",
+					"        'SourceDomain',\r\n",
+					"        'SourceHeadCustomerGroup',\r\n",
+					"        'SourceLinkedCustomerNumber',\r\n",
+					"        'SourceVisitStartTime',\r\n",
+					"        'SourceSessionId',\r\n",
+					"        'SourceSessionSortOrder',\r\n",
+					"        'SourceProduct')\r\n",
+					"\r\n",
+					"df_coversions_union = df_coversions_pivot.union(df_rks_and_k_and_mi)\r\n",
+					"\r\n",
+					"df_coversions_union = df_coversions_union.withColumn('DailyVisitorId',dense_rank().over(Window.partitionBy().orderBy(asc('LeadDateKey'),asc('CampaignKey'),asc('SourceSessionId'))))\r\n",
+					"df_coversions_union = df_coversions_union.withColumn('DailyVisitorCount',count(col('DailyVisitorId')).over(Window.partitionBy('DailyVisitorId')))\r\n",
+					"df_coversions_union = df_coversions_union.withColumn('DailyVisitorId', when(col('DailyVisitorCount') == 1, 0).otherwise(col('DailyVisitorId')))\r\n",
+					""
+				],
+				"execution_count": null
+			}
+		]
+	}
+}

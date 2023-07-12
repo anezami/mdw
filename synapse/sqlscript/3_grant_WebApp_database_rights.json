@@ -1,0 +1,20 @@
+{
+	"name": "3_grant_WebApp_database_rights",
+	"properties": {
+		"folder": {
+			"name": "Blog"
+		},
+		"content": {
+			"query": "USE [Blog-Serverless-API];\nCREATE USER [<<web app name>>] FROM EXTERNAL PROVIDER;                       \nALTER ROLE [db_datareader] ADD MEMBER [<<web app name>>];\n \nGRANT EXECUTE ON OBJECT::dbo.get_taxidata\n    TO [<<web app name>>];  \nGO  \n\nGRANT EXECUTE ON OBJECT::dbo.get_taxidataAmount\n    TO [<<web app name>>];  \nGO ",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "master",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

@@ -1,0 +1,16 @@
+{
+	"name": "CloudStreaming",
+	"type": "Microsoft.Synapse/workspaces/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureSqlDatabase",
+		"typeProperties": {
+			"connectionString": "integrated security=False;encrypt=True;connection timeout=30;data source=southridge-sqlserver-56c6266raeawe.database.windows.net;initial catalog=CloudStreaming;user id=southridge",
+			"encryptedCredential": "ew0KICAiVmVyc2lvbiI6ICIyMDE3LTExLTMwIiwNCiAgIlByb3RlY3Rpb25Nb2RlIjogIktleSIsDQogICJTZWNyZXRDb250ZW50VHlwZSI6ICJQbGFpbnRleHQiLA0KICAiQ3JlZGVudGlhbElkIjogIlNPVVRIUklER0VTWU5BUFNFUkJSX2IyNWFkOGZkLTgyNjQtNGQzMS05NmRmLTMyMTJiYTI2NjI5OSINCn0="
+		},
+		"connectVia": {
+			"referenceName": "AutoResolveIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

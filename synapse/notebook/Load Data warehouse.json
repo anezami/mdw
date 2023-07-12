@@ -1,0 +1,169 @@
+{
+	"name": "Load Data warehouse",
+	"properties": {
+		"folder": {
+			"name": "Challenge 05"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"bigDataPool": {
+			"referenceName": "SparkPool",
+			"type": "BigDataPoolReference"
+		},
+		"sessionProperties": {
+			"driverMemory": "56g",
+			"driverCores": 8,
+			"executorMemory": "56g",
+			"executorCores": 8,
+			"numExecutors": 2,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"enableDebugMode": false,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "Synapse PySpark"
+			},
+			"language_info": {
+				"name": "python"
+			},
+			"a365ComputeOptions": {
+				"id": "/subscriptions/513a7987-b0d9-4106-a24d-4b3f49136ea8/resourceGroups/mdw-oh-rbr-westeurope/providers/Microsoft.Synapse/workspaces/southridgesynapserbr/bigDataPools/SparkPool",
+				"name": "SparkPool",
+				"type": "Spark",
+				"endpoint": "https://southridgesynapserbr.dev.azuresynapse.net/livyApi/versions/2019-11-01-preview/sparkPools/SparkPool",
+				"auth": {
+					"type": "AAD",
+					"authResource": "https://dev.azuresynapse.net"
+				},
+				"sparkVersion": "2.4",
+				"nodeCount": 10,
+				"cores": 8,
+				"memory": 56
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Read Actors from parquet"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"from pyspark.sql.window import Window\r\n",
+					"from pyspark.sql.functions import col, row_number, concat, monotonically_increasing_id\r\n",
+					"\r\n",
+					"df = spark.read.parquet(\"abfss://conformed@datalakesouthridgerbr.dfs.core.windows.net/actors\")\r\n",
+					"\r\n",
+					"df = df.select(\r\n",
+					"    [\r\n",
+					"        # col(\"ActorID\"),\r\n",
+					"        col(\"ActorName\"),\r\n",
+					"        col(\"Gender\")\r\n",
+					"    ]\r\n",
+					").dropDuplicates().withColumn(\"idx\", monotonically_increasing_id())\r\n",
+					"\r\n",
+					"w = Window.orderBy(\"idx\")\r\n",
+					"df_withSK = df.withColumn(\"ActorSK\", row_number().over(w)).drop(\"idx\")\r\n",
+					"\r\n",
+					"df_withSK.show(10)\r\n",
+					"df_withSK.createOrReplaceTempView(\"pysparkdftemptable\")"
+				],
+				"execution_count": 2
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Write actors to data warehouse (sqlpool)\r\n",
+					"\r\n",
+					"Code from: https://github.com/MicrosoftDocs/azure-docs/blob/master/articles/synapse-analytics/spark/synapse-spark-sql-pool-import-export.md#use-pyspark-with-the-connector"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"microsoft": {
+						"language": "scala"
+					}
+				},
+				"source": [
+					"%%spark\r\n",
+					" import com.microsoft.spark.sqlanalytics.utils.Constants\r\n",
+					" import org.apache.spark.sql.SqlAnalyticsConnector._\r\n",
+					"\r\n",
+					"val scalaDataFrame = spark.read.sqlanalytics(\"sqlpool.dbo.DimActors\")\r\n",
+					"\r\n",
+					"val scala_df = spark.sqlContext.sql(\"select * from pysparkdftemptable\")\r\n",
+					"//scala_df.show(10)\r\n",
+					"\r\n",
+					"//scala_df.write.synapsesql(\"southridgedwh.dbo.DimActors_Temp\", Constants.INTERNAL)"
+				],
+				"execution_count": 48
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"microsoft": {
+						"language": "scala"
+					}
+				},
+				"source": [
+					"%%spark\r\n",
+					"\r\n",
+					"val df = spark.read.synapsesql(\"sqlpool.dbo.DimActors\")\r\n",
+					"\r\n",
+					"df.show()\r\n",
+					"\r\n",
+					"Exception: com.microsoft.spark.sqlanalytics.exception.SQLAnalyticsConnectorException: com.microsoft.sqlserver.jdbc.SQLServerException: Columns with UniqueIdentifier types are not supported in external tables"
+				]
+			}
+		]
+	}
+}
